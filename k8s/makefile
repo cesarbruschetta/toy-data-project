@@ -43,3 +43,11 @@ install-registry: ## Install Docker Registry
 		--repo https://helm.twun.io \
 		--version 2.2.3 \
 		--values ./manifests/registry/values.yaml
+
+install-kafka: ## Install Kafka
+	@echo "Installing Kafka"
+	@${HELM} upgrade --install kafka \
+		bitnami/kafka \
+		--namespace kafka --create-namespace \
+		--version 31.4.0 \
+		--values ./manifests/kafka/values.yaml

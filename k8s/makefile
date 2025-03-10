@@ -51,3 +51,8 @@ install-kafka: ## Install Kafka
 		--namespace kafka --create-namespace \
 		--version 31.4.0 \
 		--values ./manifests/kafka/values.yaml
+
+install-andyApi: ## Install Andy API
+	@echo "Installing Andy API"
+	@${KUBECTL} install \
+		--file ./manifests/andy-api/

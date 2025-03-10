@@ -1,0 +1,78 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.9.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+  
+  # reachable on 9092 from the host and on 29092 from inside docker compose
+  kafka:
+    image: confluentinc/cp-kafka:7.9.0
+    depends_on:
+      - zookeeper
+    ports:
+      - '9092:9092'
+    expose:
+      - '29092'
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_MIN_INSYNC_REPLICAS: '1'
+
+  init-kafka:
+    image: confluentinc/cp-kafka:7.9.0
+    depends_on:
+      - kafka
+    volumes:
+      - ./dev/kafka/init-kafka.sh:/init-kafka.sh
+    entrypoint: [ '/bin/sh', '-e' ]
+    command: '/init-kafka.sh'
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8080:8080
+    depends_on:
+      - kafka
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_CLUSTERS_0_NAME: local-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    
+  minio:
+    image: minio/minio:latest
+    entrypoint: sh
+    command: -c 'mkdir -p /data/dl-test-localstack  && minio server /data --console-address ":9001"'
+    environment:
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - ./dev/tmp/minio/data:/data
+
+  andy-api:
+    build:
+      context: ./api/andy
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - KAFKA_BROKER=kafka:29092
+      - KAFKA_TOPIC=toydata-temperature-v1
+    volumes:
+      - ./api/andy/src:/app/src
+
+  
+networks:
+  default:
+    name: external-network
+    external: true

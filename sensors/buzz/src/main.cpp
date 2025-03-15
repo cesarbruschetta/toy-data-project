@@ -8,13 +8,16 @@
 #define DHTPIN 2
 #define DHTTYPE DHT22
 
-const int DHT_SAMPLING_PERIOD = 2000;
+const int DHT_SAMPLING_PERIOD = 1500;
 const char *ANDY_API = "https://andy-api.k8s.our-cluster.ovh/temperature";
 
 DHT dht(DHTPIN, DHTTYPE);
 
 void setup()
 {
+  // Initialize the LED_BUILTIN pin as an output
+  pinMode(LED_BUILTIN, OUTPUT);  
+
   // Conexão na rede WiFi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -29,26 +32,28 @@ void setup()
 
 void loop()
 {
-  delay(DHT_SAMPLING_PERIOD);
-
+  // Turn the LED on 
+  digitalWrite(LED_BUILTIN, LOW); 
+  
   if ((WiFi.status() == WL_CONNECTED))
   {
-
-    HTTPClient http;
-    WiFiClient client;
-    JsonDocument payload;
-
-    http.begin(client, ANDY_API); // HTTP
-    http.addHeader("Content-Type", "application/json");
 
     float humidity = dht.readHumidity();
     float temperature = dht.readTemperature();
     if (isnan(temperature) || isnan(humidity)) {
       return;
     }
-    
-    float hic = dht.computeHeatIndex(temperature, humidity, false);
+
+    HTTPClient http;
+    WiFiClient client;
+    http.begin(client, ANDY_API); // HTTP
+    http.addHeader("Content-Type", "application/json");
+
+    JsonDocument payload;
     payload["sensor_id"] = SENSOR_ID;
+
+    // DHT22    
+    float hic = dht.computeHeatIndex(temperature, humidity, false);
     payload["temperature"] = temperature;
     payload["humidity"] = humidity;
     payload["heat_index"] = hic;
@@ -63,4 +68,10 @@ void loop()
     // Free resources
     http.end();
   }
+
+  delay(500);
+  // Turn the LED off
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  delay(DHT_SAMPLING_PERIOD);
 }

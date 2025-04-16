@@ -44,6 +44,15 @@ install-registry: ## Install Docker Registry
 		--version 2.2.3 \
 		--values ./manifests/registry/values.yaml
 
+install-registry-ui: ## Install Docker Registry UI
+	@echo "Installing Docker Registry UI"
+	@${HELM} upgrade --install docker-registry-ui \
+		docker-registry-ui \
+		--repo https://helm.joxit.dev \
+		--namespace registry \
+		--version 1.1.3 \
+		--values ./manifests/docker-registry-ui/values.yaml
+
 install-kafka: ## Install Kafka
 	@echo "Installing Kafka"
 	@${HELM} upgrade --install kafka \
@@ -52,7 +61,17 @@ install-kafka: ## Install Kafka
 		--version 31.4.0 \
 		--values ./manifests/kafka/values.yaml
 
+install-kafka-ui: ## Install Kafka UI
+	@echo "Installing Kafka UI"
+	@${HELM} upgrade --install kafka-ui \
+		kafka-ui \
+		--repo https://provectus.github.io/kafka-ui-charts \
+		--namespace kafka \
+		--version 0.5.0 \
+		--values ./manifests/kafka-ui/values.yaml
+	@${KUBECTL} apply -f ./manifests/kafka-ui/kafka-ui-ingress.yaml
+
 install-andyApi: ## Install Andy API
 	@echo "Installing Andy API"
-	@${KUBECTL} install \
-		--file ./manifests/andy-api/
+	@${KUBECTL} apply \
+		-f ./manifests/andy-api/

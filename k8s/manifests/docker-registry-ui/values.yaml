@@ -1,0 +1,15 @@
+ui:
+  proxy: true
+  dockerRegistryUrl: "http://registry-docker-registry.registry.svc.cluster.local:5000"
+  ingress:
+    enabled: true
+    host: registry-ui.k8s.our-cluster.ovh
+    tls:
+      - hosts:
+        - registry-ui.k8s.our-cluster.ovh
+        secretName: registry-ui-tls
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod

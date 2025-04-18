@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: andy-api
-          image: registry.registry.svc.cluster.local/toy-data-project/andy-api:3.9
+          image: registry.k8s.our-cluster.ovh/toy-data-project/andy-api:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

@@ -56,9 +56,10 @@ install-registry-ui: ## Install Docker Registry UI
 install-kafka: ## Install Kafka
 	@echo "Installing Kafka"
 	@${HELM} upgrade --install kafka \
-		bitnami/kafka \
+		kafka \
+		--repo https://charts.bitnami.com/bitnami \
 		--namespace kafka --create-namespace \
-		--version 31.4.0 \
+		--version 32.2.0 \
 		--values ./manifests/kafka/values.yaml
 
 install-kafka-ui: ## Install Kafka UI

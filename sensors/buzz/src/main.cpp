@@ -9,7 +9,7 @@
 #define DHTTYPE DHT22
 
 const int DHT_SAMPLING_PERIOD = 1500;
-const char *ANDY_API = "https://andy-api.k8s.our-cluster.ovh/temperature";
+const char *ANDY_API = "http://andy-api.k8s.our-cluster.ovh/temperature";
 
 DHT dht(DHTPIN, DHTTYPE);
 

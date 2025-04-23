@@ -1,4 +1,4 @@
-FROM bitnami/spark:3.5.0
+FROM bitnami/spark:3.5.5
 
 ADD ./src/main.py /app/hamm_consumer.py
 ADD ./requirements.txt /app/requirements.txt

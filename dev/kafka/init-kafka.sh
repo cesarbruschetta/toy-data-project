@@ -5,7 +5,7 @@ echo -e 'Creating kafka topics'
 kafka-topics --bootstrap-server kafka:29092 \
     --create --if-not-exists \
     --replication-factor 1 \
-    --partitions 1 \
+    --partitions 2 \
     --topic toydata-topic-temperature-v1
 
 echo -e 'Successfully created the following topics:'

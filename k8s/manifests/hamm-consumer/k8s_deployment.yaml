@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hamm-consumer
+  namespace: toy-data-project
+  labels:
+    app: hamm-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hamm-consumer
+  template:
+    metadata:
+      labels:
+        app: hamm-consumer
+    spec:
+      containers:
+        - name: hamm-consumer
+          image: registry.k8s.our-cluster.ovh/toy-data-project/hamm-consumer:latest
+          imagePullPolicy: Always
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: service-user-ingestion-data
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hamm-consumer
+                  key: minio_secret_key
+            - name: MINIO_ENDPOINT
+              value: minio.minio.svc.cluster.local:9000
+            - name: MINIO_BUCKET
+              value: lake-transient-ingestion
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka.kafka.svc.cluster.local:9092
+            - name: KAFKA_CONSUMER_TOPIC
+              value: toydata-topic-temperature-v1

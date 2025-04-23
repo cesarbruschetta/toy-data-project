@@ -76,3 +76,16 @@ install-andyApi: ## Install Andy API
 	@echo "Installing Andy API"
 	@${KUBECTL} apply \
 		-f ./manifests/andy-api/
+
+install-hammConsumer: ## Install Hamm Consumer
+	@echo "Installing Hamm Consumer"
+	@${KUBECTL} delete secret hamm-consumer \
+		--namespace toy-data-project \
+		--ignore-not-found
+	@${KUBECTL} create secret generic \
+		hamm-consumer \
+		--namespace toy-data-project \
+		--from-literal=minio_secret_key=${MINIO_USER_SERVICE_PASSWORD}
+	@${KUBECTL} apply \
+		-f ./manifests/hamm-consumer/
+	

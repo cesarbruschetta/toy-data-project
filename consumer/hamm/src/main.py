@@ -73,7 +73,7 @@ class HammConsumerKafkaToRawZone:
             .option("kafka.bootstrap.servers", self.settings.KAFKA_BOOTSTRAP_SERVERS)
             .option("subscribe", self.settings.KAFKA_CONSUMER_TOPIC)
             .option("group.id", self.settings.KAFKA_CONSUMER_GROUP)
-            .option("startingOffsets", "latest")
+            .option("startingOffsets", "earliest")
             .load()
         )
         # Converte os dados de Kafka de bytes para string e aplica o schema

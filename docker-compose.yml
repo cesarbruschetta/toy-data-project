@@ -57,6 +57,67 @@ services:
     volumes:
       - ./dev/tmp/minio/data:/data
 
+  postgres:
+    image: postgres:17.4-alpine3.21
+    environment:
+      POSTGRES_DB: 'metastore_db'
+      POSTGRES_USER: 'hive'
+      POSTGRES_PASSWORD: 'password'
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./dev/tmp/postgres/hive-db:/var/lib/postgresql
+
+  metastore:
+    build:
+      context: ./dev/hive
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      SERVICE_NAME: 'metastore'
+    command: bash -c "
+      schematool -dbType postgres \
+                 -initSchema \
+                 --userName hive \
+                 --passWord password \
+                 --url jdbc:postgresql://postgres:5432/metastore_db && \
+      hive --service metastore"
+    ports:
+      - '9083:9083'
+    volumes:
+      - ./dev/hive/core-site.xml:/opt/hive/conf/core-site.xml:ro
+
+  hiveserver2:
+    build:
+      context: ./dev/hive
+      dockerfile: Dockerfile
+    depends_on:
+      - metastore
+    environment:
+      HIVE_SERVER2_THRIFT_PORT: 10000
+      SERVICE_NAME: 'hiveserver2'
+      HIVE_LOGLEVEL: INFO
+      SERVICE_OPTS: '-Xmx1G -Dhive.metastore.uris=thrift://metastore:9083'
+      IS_RESUME: 'true'
+    command: hiveserver2
+    ports:
+      - '10000:10000'
+      - '10002:10002'
+    volumes:
+      - ./dev/hive/core-site.xml:/opt/hive/conf/core-site.xml:ro
+      - ./dev/hive/init-metastore.sql:/tmp/init.sql:ro
+
+  trino:
+    image: trinodb/trino:426
+    ports:
+      - 8083:8080
+    volumes:
+      - ./dev/trino/hive.properties:/etc/trino/catalog/hive.properties
+    depends_on:
+      - metastore
+    
   andy-api:
     build:
       context: ./api/andy
@@ -70,6 +131,8 @@ services:
       - KAFKA_TOPIC=toydata-topic-temperature-v1
     volumes:
       - ./api/andy/src:/app/src
+    depends_on:
+      - kafka
 
   hamm-consumer:
     build:
@@ -84,7 +147,10 @@ services:
         KAFKA_CONSUMER_TOPIC: toydata-topic-temperature-v1
     volumes:
       - ./consumer/hamm/src/main.py:/app/hamm_consumer.py
-  
+    depends_on:
+      - kafka
+      - minio
+
 networks:
   default:
     name: external-network

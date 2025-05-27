@@ -56,3 +56,9 @@ buckets:
     # set objectlocking for
     # bucket [true|false] NOTE: versioning is enabled by default if you use locking 
     objectlocking: false
+
+service:
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/path: '/minio/v2/metrics/cluster'
+    prometheus.io/port: '9000'

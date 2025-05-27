@@ -24,3 +24,7 @@ listeners:
     protocol: PLAINTEXT
   external:
     protocol: PLAINTEXT
+
+metrics:
+  jmx:
+    enabled: true

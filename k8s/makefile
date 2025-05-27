@@ -24,6 +24,14 @@ install-cm-webhook-ovh: ## Install OVH Cloud Manager Webhook
 		--values ./manifests/cm-webhook-ovh/values.yaml
 	@envsubst < ./manifests/cm-webhook-ovh/ovh_api_secret.yaml | ${KUBECTL} apply -f -
 
+install-prometheus:  ## Install Prometheus
+	@${HELM} upgrade --install prometheus prometheus \
+		--repo https://prometheus-community.github.io/helm-charts \
+		--create-namespace \
+		--namespace prometheus \
+		--version 25.25.0 \
+		--values ./manifests/prometheus/values.yaml
+
 install-grafana:  ## Install Grafana
 	@${HELM} upgrade --install grafana grafana \
 		--repo https://grafana.github.io/helm-charts \

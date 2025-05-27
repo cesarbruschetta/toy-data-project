@@ -117,7 +117,18 @@ services:
       - ./dev/trino/hive.properties:/etc/trino/catalog/hive.properties
     depends_on:
       - metastore
-    
+
+  grafana:
+    build:
+      context: ./dev/grafana
+      dockerfile: Dockerfile
+    volumes:
+      - ./dev/tmp/grafana:/var/lib/grafana
+    ports:
+      - 3030:3000
+    depends_on:
+      - trino
+
   andy-api:
     build:
       context: ./api/andy

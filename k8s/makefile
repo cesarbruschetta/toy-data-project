@@ -24,6 +24,14 @@ install-cm-webhook-ovh: ## Install OVH Cloud Manager Webhook
 		--values ./manifests/cm-webhook-ovh/values.yaml
 	@envsubst < ./manifests/cm-webhook-ovh/ovh_api_secret.yaml | ${KUBECTL} apply -f -
 
+install-grafana:  ## Install Grafana
+	@${HELM} upgrade --install grafana grafana \
+		--repo https://grafana.github.io/helm-charts \
+		--create-namespace \
+		--namespace grafana \
+		--version 9.2.1 \
+		--values ./manifests/grafana/values.yaml
+
 install-minio: ## Install Minio
 	@echo "Installing Minio"
 	@${HELM} upgrade --install minio \

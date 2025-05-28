@@ -123,7 +123,7 @@ services:
       context: ./dev/grafana
       dockerfile: Dockerfile
     volumes:
-      - ./dev/tmp/grafana:/var/lib/grafana
+      - ./dev/grafana/gf_database.db:/var/lib/grafana/grafana.db
     ports:
       - 3030:3000
     depends_on:
@@ -161,6 +161,17 @@ services:
     depends_on:
       - kafka
       - minio
+
+  sensor-simulator:
+    image: python:3.11-slim
+    environment:
+      - SENSOR_INTERVAL=30
+      - API_HOST=andy-api:3000
+    volumes:
+      - ./dev/sensor/simulator.py:/app/simulator.py
+    command: ["python", "/app/simulator.py",  ]
+    depends_on:
+      - andy-api
 
 networks:
   default:

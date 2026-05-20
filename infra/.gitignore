@@ -1,0 +1,16 @@
+# Terraform state
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Lambda build artifacts (gerados pelo archive_file do Terraform)
+modules/lambda/dist/
+
+# Sensitive variable files
+*.auto.tfvars
+secrets.tfvars
+
+# OS
+.DS_Store

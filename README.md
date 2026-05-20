@@ -1,14 +1,12 @@
 # toy-data-project
 
-Pipeline de dados de IoT de ponta a ponta, desde sensores físicos até consultas analíticas na nuvem. Os componentes do projeto são nomeados como personagens do Toy Story.
+Pipeline de dados de IoT de ponta a ponta, desde sensores físicos até consultas analíticas na nuvem. Os componentes são nomeados como personagens do Toy Story.
 
-## Visão geral
-
-Sensores físicos (ESP8266) ou um simulador de software coletam dados de temperatura, umidade e pressão e os enviam para uma API HTTP. A partir daí, os dados fluem por uma cadeia de mensageria até serem armazenados em um data lake na AWS, onde ficam disponíveis para consulta via Athena.
+## Fluxo de dados
 
 ```
 Sensores físicos (Buzz / Woody)
-ou Simulador (dev/sensor)
+ou Simulador (dev/sensor/simulator_aws.py)
          │
          │  POST /temperature
          ▼
@@ -16,20 +14,20 @@ ou Simulador (dev/sensor)
                       │  sns:Publish
                       ▼
                   SNS Topic
-                      │
+                      │  raw_message_delivery
                       ▼
                   SQS Queue  ◄── mensagens acumulam aqui
                       │
                       │  EventBridge (schedule: 1h)
                       ▼
                   Lambda Hamm
-                      │  s3:PutObject (JSON Lines, particionado por data)
+                      │  s3:PutObject — JSON Lines, 1 arquivo por partição
                       ▼
                   S3 Data Lake
                   └── raw/toydata-topic-temperature-v1/dt=YYYY-MM-DD/
                       │
                       ▼
-                  Glue Catalog (Partition Projection)
+                  Glue Catalog (Partition Projection — sem crawler)
                       │
                       ▼
                   Athena (queries analíticas)
@@ -37,20 +35,18 @@ ou Simulador (dev/sensor)
 
 ## Schema dos dados
 
-Cada leitura de sensor carrega os seguintes campos:
-
-| Campo | Tipo | Descrição |
+| Campo | Tipo | Origem |
 |---|---|---|
-| `sensor_id` | string | Identificador único do sensor |
-| `temperature` | double | Temperatura em °C (DHT22) |
-| `humidity` | double | Umidade relativa em % (DHT22) |
-| `heat_index` | double | Índice de calor calculado |
-| `pressure` | double | Pressão atmosférica em hPa (BMP280, opcional) |
-| `altitude` | double | Altitude em metros (BMP280, opcional) |
-| `temperature_bmp` | double | Temperatura pelo BMP280 (opcional) |
-| `timestamp` | bigint | Unix timestamp em ms — adicionado pela Andy API |
+| `sensor_id` | string | Sensor |
+| `temperature` | double | DHT22 — temperatura em °C |
+| `humidity` | double | DHT22 — umidade relativa em % |
+| `heat_index` | double | Calculado pelo sensor |
+| `pressure` | double | BMP280 — pressão em hPa (opcional) |
+| `altitude` | double | BMP280 — altitude em metros (opcional) |
+| `temperature_bmp` | double | BMP280 — temperatura (opcional) |
+| `timestamp` | bigint | Unix ms — adicionado pela Lambda Andy |
 | `ingested_at` | string | ISO 8601 — adicionado pela Lambda Hamm |
-| `dt` | date | Partição de data (YYYY-MM-DD) |
+| `dt` | date | Partição YYYY-MM-DD — derivado do timestamp |
 
 ---
 
@@ -59,147 +55,145 @@ Cada leitura de sensor carrega os seguintes campos:
 ```
 toy-data-project/
 │
-├── sensors/                    # Firmware dos sensores físicos (C++ / PlatformIO)
-│   ├── buzz/                   # Sensor ESP8266 + DHT22
-│   └── woody/                  # Sensor ESP8266 + DHT22 + BMP280 (em desenvolvimento)
+├── sensors/                        # Firmware dos sensores físicos (C++ / PlatformIO)
+│   ├── buzz/                       # ESP8266 + DHT22
+│   └── woody/                      # ESP8266 + DHT22 + BMP280 (em desenvolvimento)
 │
-├── lambdas/                    # Código das funções AWS Lambda (Python)
-│   ├── andy/                   # Producer: recebe HTTP do API Gateway e publica no SNS
+├── lambdas/                        # Funções AWS Lambda (Python)
+│   ├── andy/                       # Producer: HTTP → SNS
 │   │   ├── handler.py
 │   │   ├── requirements.txt
-│   │   └── tests/
-│   │       └── test_handler.py
-│   └── hamm/                   # Consumer: drena SQS e grava JSON Lines no S3
+│   │   └── tests/test_handler.py
+│   └── hamm/                       # Consumer: SQS drain → S3
 │       ├── handler.py
 │       ├── requirements.txt
-│       └── tests/
-│           └── test_handler.py
+│       └── tests/test_handler.py
 │
-├── infra/                      # Infraestrutura AWS (Terraform)
-│   ├── main.tf                 # Raiz — orquestra todos os módulos
-│   ├── variables.tf            # Variáveis globais com valores padrão
-│   ├── outputs.tf              # Outputs: URL da API, nomes dos recursos, etc.
-│   ├── Makefile                # Atalhos: make plan, make apply, make hamm-invoke
+├── infra/                          # Infraestrutura AWS (Terraform)
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
 │   └── modules/
-│       ├── api_gateway/        # REST API + stage v1 + throttling + validação de schema
-│       ├── athena/             # Workgroup + 4 named queries prontas
-│       ├── glue/               # Database + tabela com Partition Projection (sem crawler)
-│       ├── iam/                # Roles para Lambda Andy, Lambda Hamm e Athena
-│       ├── lambda/             # Funções Andy e Hamm + EventBridge schedule
-│       ├── messaging/          # SNS topic + SQS queue + Dead Letter Queue
-│       └── storage/            # S3 data lake + S3 athena results
+│       ├── api_gateway/            # REST API + stage v1 + throttling
+│       ├── athena/                 # Workgroup + 4 named queries
+│       ├── glue/                   # Database + tabela com Partition Projection
+│       ├── iam/                    # Roles para Lambda Andy, Hamm e Athena
+│       ├── lambda/                 # Funções + EventBridge schedule
+│       ├── messaging/              # SNS + SQS + DLQ
+│       └── storage/                # S3 data lake + S3 athena results
 │
-├── dev/                        # Utilitários para desenvolvimento local
-│   ├── grafana/                # Dockerfile e banco do Grafana
-│   ├── hive/                   # Dockerfile, core-site.xml e SQL de inicialização do metastore
-│   ├── kafka/                  # Script de criação do tópico Kafka
-│   ├── sensor/
-│   │   ├── simulator.py        # Simulador de sensor para o docker-compose local
-│   │   └── simulator_aws.py    # Simulador de sensor apontando para o API Gateway AWS
-│   └── trino/                  # Configuração do conector Hive para o Trino
+├── dev/                            # Recursos para desenvolvimento local
+│   ├── localstack/
+│   │   ├── init.sh                 # Cria SNS, SQS e S3 no LocalStack ao iniciar
+│   │   └── .env.localstack         # Variáveis para rodar as Lambdas localmente
+│   └── sensor/
+│       └── simulator_aws.py        # Simula leituras de sensor (HTTP/HTTPS)
 │
-├── docker-compose.yml          # Stack completa para desenvolvimento local
+├── Makefile                        # Comandos centralizados do projeto
+├── docker-compose.yml              # LocalStack para desenvolvimento local
 └── README.md
 ```
 
 ---
 
-## Ambientes
+## Pré-requisitos
 
-O projeto tem dois ambientes com stacks distintas:
-
-### Local (desenvolvimento)
-
-Orquestrado pelo `docker-compose.yml`. Replica o pipeline completo localmente usando serviços open source equivalentes aos da AWS.
-
-| Serviço local | Equivalente AWS |
+| Ferramenta | Uso |
 |---|---|
-| Kafka + Zookeeper | SNS + SQS |
-| Andy API (Node.js/Fastify) | API Gateway + Lambda Andy |
-| Hamm Consumer (PySpark) | Lambda Hamm |
-| MinIO | S3 |
-| Hive Metastore + HiveServer2 | Glue Catalog |
-| Trino | Athena |
-| Grafana | — |
-| sensor-simulator | dev/sensor/simulator.py |
+| Docker + Docker Compose | LocalStack para dev local |
+| Python 3.11+ | Lambdas e simulador de sensor |
+| Terraform >= 1.6 | Provisionar infraestrutura AWS |
+| AWS CLI | Credenciais e operações na AWS |
+| awslocal | Inspecionar recursos no LocalStack |
+| PlatformIO | Compilar e fazer upload do firmware dos sensores |
+
+---
+
+## Comandos rápidos
+
+O `Makefile` na raiz centraliza todos os fluxos do projeto.
 
 ```bash
-# Subir o ambiente local completo
-docker compose up -d
+make          # exibe o menu completo com todos os comandos
 ```
 
-Serviços disponíveis após o start:
-
-| Serviço | URL |
-|---|---|
-| Andy API | http://localhost:3000 |
-| Kafka UI | http://localhost:8080 |
-| MinIO Console | http://localhost:9001 |
-| Trino | http://localhost:8083 |
-| Grafana | http://localhost:3030 |
-
-### AWS (produção)
-
-Provisionado pelo Terraform em `infra/`. Arquitetura 100% serverless.
+### Dev local
 
 ```bash
-cd infra
-terraform init
-terraform apply
+make dev-up             # sobe o LocalStack
+make dev-status         # lista SNS, SQS e S3 criados
+make dev-queue-peek     # inspeciona mensagens na fila SQS
+make dev-s3-ls          # lista arquivos gravados no S3 local
+make dev-down           # para os containers
 ```
 
-Para testar o endpoint após o deploy:
+### Lambdas
 
 ```bash
-# Exibe a URL do endpoint
-make api-url
-
-# Dispara manualmente o drain da fila SQS
-make hamm-invoke
+make lambda-setup       # cria virtualenvs e instala dependências
+make lambda-test        # roda todos os testes (moto — sem Docker)
+make lambda-invoke-andy # invoca a Andy localmente via LocalStack
+make lambda-invoke-hamm # invoca a Hamm localmente via LocalStack
 ```
 
-Para simular sensores apontando para a AWS:
+### Infra AWS
 
 ```bash
-API_URL=$(cd infra && terraform output -raw api_temperature_endpoint) \
-SENSOR_ID=dev_sensor \
-SENSOR_INTERVAL=30 \
-python dev/sensor/simulator_aws.py
+make infra-init         # terraform init
+make infra-plan         # terraform plan
+make infra-apply        # terraform apply
+make infra-outputs      # exibe URLs e nomes dos recursos
+make infra-hamm-invoke  # dispara o drain da fila na AWS manualmente
+```
+
+### Sensores
+
+```bash
+make sensor-simulator   # roda o simulador apontando para o API Gateway AWS
+```
+
+---
+
+## Fluxo de desenvolvimento
+
+```bash
+# 1. Instalar dependências das Lambdas
+make lambda-setup
+
+# 2. Rodar os testes unitários (sem Docker, sem AWS)
+make lambda-test
+
+# 3. Testar o fluxo completo localmente com LocalStack
+make dev-up
+make lambda-invoke-andy   # publica uma mensagem no SNS → SQS
+make lambda-invoke-hamm   # drena a fila e grava no S3
+make dev-s3-ls            # confirma que os dados chegaram
+
+# 4. Deploy na AWS
+make infra-init
+make infra-apply
+make infra-outputs        # pega a URL do API Gateway
+
+# 5. Simular sensores contra a AWS real
+make sensor-simulator
 ```
 
 ---
 
 ## Sensores físicos
 
-Dois sensores ESP8266 programados com PlatformIO:
-
 ### Buzz (`sensors/buzz`)
-
-- **Hardware:** ESP8266 (ESP-01) + DHT22
-- **Dados:** temperatura, umidade, heat index
-- **Endpoint:** `http://andy-api.k8s.our-cluster.ovh/temperature`
+ESP8266 (ESP-01) + DHT22. Coleta temperatura, umidade e heat index.
 
 ### Woody (`sensors/woody`)
+ESP8266 + DHT22 + BMP280 (em integração). Adiciona pressão, altitude e temperatura BMP.
 
-- **Hardware:** ESP8266 + DHT22 + BMP280 (em integração)
-- **Dados:** temperatura, umidade, heat index + pressão, altitude, temperatura BMP (comentados — em desenvolvimento)
-
-#### Configuração dos sensores
-
-Copie o arquivo de exemplo e preencha com suas credenciais:
+**Configuração:**
 
 ```bash
 cp sensors/buzz/src/secrets_example.h sensors/buzz/src/secrets.h
+# edite secrets.h com WIFI_SSID, WIFI_PASSWORD e SENSOR_ID
 ```
-
-```cpp
-// sensors/buzz/src/secrets.h
-const char* WIFI_SSID     = "sua-rede";
-const char* WIFI_PASSWORD = "sua-senha";
-const char* SENSOR_ID     = "buzz";
-```
-
-Para fazer o upload do firmware:
 
 ```bash
 cd sensors/buzz
@@ -208,21 +202,14 @@ pio run --target upload
 
 ---
 
-## Componentes em detalhe
+## Componentes
 
-### Andy API
+### Lambda Andy
+Recebe `POST /temperature` do API Gateway, valida o payload e publica no SNS com o timestamp de ingestão.
 
-Código em `lambdas/andy/handler.py` — Python, recebe HTTP do API Gateway e publica no SNS.
+Rotas: `POST /temperature` · `GET /health-check`
 
-**Rotas:**
-
-| Método | Path | Descrição |
-|---|---|---|
-| `POST` | `/temperature` | Recebe leitura do sensor e publica na fila |
-| `GET` | `/health-check` | Verifica se o serviço está no ar |
-
-**Payload esperado:**
-
+Payload mínimo:
 ```json
 {
   "sensor_id": "buzz",
@@ -232,93 +219,17 @@ Código em `lambdas/andy/handler.py` — Python, recebe HTTP do API Gateway e pu
 }
 ```
 
-### Hamm Consumer
+### Lambda Hamm
+Invocada pelo EventBridge a cada hora. Drena toda a fila SQS, agrupa os registros por data de partição e grava um único arquivo JSON Lines por partição por execução no S3.
 
-Código em `lambdas/hamm/handler.py` — Python, invocada pelo EventBridge a cada hora, drena toda a fila SQS e grava JSON Lines no S3 particionado por data.
+### Athena
+Quatro named queries disponíveis no workgroup após o `terraform apply`:
 
-### Glue + Athena
-
-A tabela `sensor_readings` usa **Partition Projection** — novas partições de data são reconhecidas automaticamente pelo Athena sem necessidade de crawler ou `MSCK REPAIR TABLE`.
-
-Quatro named queries estão disponíveis no workgroup após o `terraform apply`:
-
-- `latest-sensor-readings` — 100 leituras mais recentes
-- `daily-average-by-sensor` — média diária por sensor
-- `hourly-average-last-24h` — média horária das últimas 24h
-- `active-sensors` — lista de sensores com última data de leitura
-
----
-
-## Pré-requisitos
-
-| Ferramenta | Uso |
+| Query | Descrição |
 |---|---|
-| Docker + Docker Compose | Ambiente local com LocalStack |
-| PlatformIO | Compilar e fazer upload do firmware |
-| Terraform >= 1.6 | Provisionar infraestrutura AWS |
-| AWS CLI + awslocal | Configurar credenciais e inspecionar recursos |
-| Python 3.11+ | Lambdas e simulador de sensor |
-
-## Comandos rápidos
-
-O Makefile na raiz centraliza os comandos de todos os contextos do projeto.
-
-```bash
-make                    # exibe o menu completo
-```
-
-```
-Dev local (LocalStack)
-  dev-up                Sobe o LocalStack
-  dev-down              Para e remove os containers
-  dev-status            Mostra SNS, SQS e S3 criados no LocalStack
-  dev-queue-peek        Exibe mensagens na fila SQS sem consumir
-  dev-s3-ls             Lista arquivos gravados no S3 local
-
-Lambdas
-  lambda-setup          Cria virtualenvs e instala dependências
-  lambda-test           Roda os testes de ambas as Lambdas
-  lambda-invoke-andy    Invoca a Andy localmente via LocalStack
-  lambda-invoke-hamm    Invoca a Hamm localmente via LocalStack
-
-Infra (Terraform / AWS)
-  infra-init            Inicializa o Terraform
-  infra-plan            Mostra o plano de mudanças
-  infra-apply           Aplica a infraestrutura na AWS
-  infra-outputs         Exibe URLs e nomes dos recursos criados
-  infra-hamm-invoke     Dispara manualmente o drain da fila na AWS
-
-Sensores
-  sensor-simulator      Roda o simulador apontando para a AWS
-```
-
-## Testando as Lambdas localmente
-
-Cada Lambda tem seus próprios testes com mocks da AWS via [moto](https://github.com/getmoto/moto) — nenhuma credencial ou conexão real é necessária.
-
-```bash
-# Andy
-python -m venv lambdas/andy/.venv
-source lambdas/andy/.venv/bin/activate
-pip install -r lambdas/andy/requirements.txt
-pytest lambdas/andy/tests/ -v
-
-# Hamm
-python -m venv lambdas/hamm/.venv
-source lambdas/hamm/.venv/bin/activate
-pip install -r lambdas/hamm/requirements.txt
-pytest lambdas/hamm/tests/ -v
-```
+| `latest-sensor-readings` | 100 leituras mais recentes |
+| `daily-average-by-sensor` | Média diária por sensor |
+| `hourly-average-last-24h` | Média horária das últimas 24h |
+| `active-sensors` | Sensores com última data de leitura |
 
 ---
-
-## Decisões de arquitetura
-
-**Por que SNS + SQS em vez de Kafka na AWS?**  
-Kafka requer instâncias dedicadas (MSK mínimo ~$150/mês). SNS + SQS é serverless, escala para zero e custa centavos para o volume deste projeto.
-
-**Por que a Lambda Hamm drena a fila em schedule e não em tempo real?**  
-Processar cada mensagem individualmente geraria um PUT no S3 por leitura de sensor (~86.400/mês com 1 sensor). Com o drain agendado de hora em hora, isso cai para ~720 PUTs/mês, reduzindo custo e gerando arquivos maiores que o Athena lê com mais eficiência.
-
-**Por que Partition Projection em vez de Glue Crawler?**  
-O crawler custa ~$4,40/mês rodando diariamente. A Partition Projection é gratuita e resolve o mesmo problema para partições baseadas em datas com padrão previsível.

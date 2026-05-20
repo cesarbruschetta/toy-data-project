@@ -1,179 +1,47 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.9.0
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-  
-  # reachable on 9092 from the host and on 29092 from inside docker compose
-  kafka:
-    image: confluentinc/cp-kafka:7.9.0
-    depends_on:
-      - zookeeper
-    ports:
-      - '9092:9092'
-    expose:
-      - '29092'
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
-      KAFKA_MIN_INSYNC_REPLICAS: '1'
 
-  init-kafka:
-    image: confluentinc/cp-kafka:7.9.0
-    depends_on:
-      - kafka
-    volumes:
-      - ./dev/kafka/init-kafka.sh:/init-kafka.sh
-    entrypoint: [ '/bin/sh', '-e' ]
-    command: '/init-kafka.sh'
+  # ── LocalStack ──────────────────────────────────────────────────────────────
+  # Emula os serviços AWS usados pelo projeto: SNS, SQS e S3.
+  # As Lambdas rodam localmente (pytest / linha de comando) e apontam para
+  # os endpoints do LocalStack via variáveis de ambiente.
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+  localstack:
+    image: localstack/localstack:3.4
     ports:
-      - 8080:8080
-    depends_on:
-      - kafka
+      - "4566:4566"       # endpoint único para todos os serviços
     environment:
-      SERVER_PORT: 8080
-      KAFKA_CLUSTERS_0_NAME: local-kafka
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    
-  minio:
-    image: minio/minio:latest
-    entrypoint: sh
-    command: -c 'mkdir -p /data/dl-test-localstack  && minio server /data --console-address ":9001"'
-    environment:
-      MINIO_ACCESS_KEY: minio
-      MINIO_SECRET_KEY: minio123
-    ports:
-      - 9000:9000
-      - 9001:9001
+      - SERVICES=sns,sqs,s3
+      - DEFAULT_REGION=us-east-1
+      - EAGER_SERVICE_LOADING=1
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
     volumes:
-      - ./dev/tmp/minio/data:/data
+      - ./dev/localstack/init.sh:/etc/localstack/init/ready.d/init.sh:ro
+      - localstack-data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  postgres:
-    image: postgres:17.4-alpine3.21
-    environment:
-      POSTGRES_DB: 'metastore_db'
-      POSTGRES_USER: 'hive'
-      POSTGRES_PASSWORD: 'password'
-    ports:
-      - '5432:5432'
-    volumes:
-      - ./dev/tmp/postgres/hive-db:/var/lib/postgresql
-
-  metastore:
-    build:
-      context: ./dev/hive
-      dockerfile: Dockerfile
-    depends_on:
-      - postgres
-      - minio
-    environment:
-      SERVICE_NAME: 'metastore'
-    command: bash -c "
-      schematool -dbType postgres \
-                 -initSchema \
-                 --userName hive \
-                 --passWord password \
-                 --url jdbc:postgresql://postgres:5432/metastore_db && \
-      hive --service metastore"
-    ports:
-      - '9083:9083'
-    volumes:
-      - ./dev/hive/core-site.xml:/opt/hive/conf/core-site.xml:ro
-
-  hiveserver2:
-    build:
-      context: ./dev/hive
-      dockerfile: Dockerfile
-    depends_on:
-      - metastore
-    environment:
-      HIVE_SERVER2_THRIFT_PORT: 10000
-      SERVICE_NAME: 'hiveserver2'
-      HIVE_LOGLEVEL: INFO
-      SERVICE_OPTS: '-Xmx1G -Dhive.metastore.uris=thrift://metastore:9083'
-      IS_RESUME: 'true'
-    command: hiveserver2
-    ports:
-      - '10000:10000'
-      - '10002:10002'
-    volumes:
-      - ./dev/hive/core-site.xml:/opt/hive/conf/core-site.xml:ro
-      - ./dev/hive/init-metastore.sql:/tmp/init.sql:ro
-
-  trino:
-    image: trinodb/trino:426
-    ports:
-      - 8083:8080
-    volumes:
-      - ./dev/trino/hive.properties:/etc/trino/catalog/hive.properties
-    depends_on:
-      - metastore
-
-  grafana:
-    build:
-      context: ./dev/grafana
-      dockerfile: Dockerfile
-    volumes:
-      - ./dev/grafana/gf_database.db:/var/lib/grafana/grafana.db
-    ports:
-      - 3030:3000
-    depends_on:
-      - trino
-
-  andy-api:
-    build:
-      context: ./api/andy
-      dockerfile: Dockerfile
-    ports:
-      - 3000:3000
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - KAFKA_BROKER=kafka:29092
-      - KAFKA_TOPIC=toydata-topic-temperature-v1
-    volumes:
-      - ./api/andy/src:/app/src
-    depends_on:
-      - kafka
-
-  hamm-consumer:
-    build:
-      context: ./consumer/hamm
-      dockerfile: Dockerfile
-    environment:
-        MINIO_ACCESS_KEY: minio
-        MINIO_SECRET_KEY: minio123
-        MINIO_ENDPOINT: minio:9000
-        MINIO_BUCKET: dl-test-localstack
-        KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-        KAFKA_CONSUMER_TOPIC: toydata-topic-temperature-v1
-    volumes:
-      - ./consumer/hamm/src/main.py:/app/hamm_consumer.py
-    depends_on:
-      - kafka
-      - minio
+  # ── Sensor Simulator ────────────────────────────────────────────────────────
+  # Envia leituras de sensor para o endpoint configurado em API_URL.
+  # Por padrão aponta para o LocalStack (via Lambda handler rodando local),
+  # mas pode ser redirecionado para o API Gateway AWS trocando API_URL.
 
   sensor-simulator:
-    image: python:3.11-slim
+    image: python:3.12-slim
     environment:
+      - API_URL=${API_URL:-http://host.docker.internal:9000/temperature}
+      - SENSOR_ID=dev_sensor
       - SENSOR_INTERVAL=30
-      - API_HOST=andy-api:3000
     volumes:
-      - ./dev/sensor/simulator.py:/app/simulator.py
-    command: ["python", "/app/simulator.py",  ]
+      - ./dev/sensor/simulator_aws.py:/app/simulator.py:ro
+    command: ["python", "/app/simulator.py"]
     depends_on:
-      - andy-api
+      localstack:
+        condition: service_healthy
+    profiles:
+      - simulator   # só sobe com: docker compose --profile simulator up
 
-networks:
-  default:
-    name: external-network
-    external: true
+volumes:
+  localstack-data:

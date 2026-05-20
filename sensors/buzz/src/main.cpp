@@ -1,77 +1,88 @@
-
 #include "DHT.h"
-#include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <secrets.h>
 
-#define DHTPIN 2
-#define DHTTYPE DHT22
+#define DHTPIN        2
+#define DHTTYPE       DHT22
+#define LED_ON        LOW   // LED_BUILTIN é ativo em LOW no ESP8266
+#define LED_OFF       HIGH
 
-const int DHT_SAMPLING_PERIOD = 1500;
-const char *ANDY_API = "http://andy-api.k8s.our-cluster.ovh/temperature";
+// Intervalo entre leituras em ms (DHT22 precisa de pelo menos 2s entre amostras)
+const unsigned long SAMPLING_INTERVAL_MS = 30000;
 
 DHT dht(DHTPIN, DHTTYPE);
 
-void setup()
-{
-  // Initialize the LED_BUILTIN pin as an output
-  pinMode(LED_BUILTIN, OUTPUT);  
+// ─── HTTPS sem verificação de CA ─────────────────────────────────────────────
+// O API Gateway da AWS exige HTTPS. O ESP8266 suporta TLS via BearSSL, mas
+// verificar a cadeia completa de certificados consome muita memória no ESP-01.
+// setInsecure() mantém a criptografia TLS (dados em trânsito protegidos) mas
+// não valida a identidade do servidor — aceitável para sensores IoT internos.
+WiFiClientSecure wifiClient;
 
-  // Conexão na rede WiFi
+void connectWifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
+}
 
-  // Inicia o DHT
+bool readSensor(float &temperature, float &humidity, float &heatIndex) {
+  humidity    = dht.readHumidity();
+  temperature = dht.readTemperature();
+
+  if (isnan(temperature) || isnan(humidity)) {
+    return false;
+  }
+
+  heatIndex = dht.computeHeatIndex(temperature, humidity, false);
+  return true;
+}
+
+void sendReading(float temperature, float humidity, float heatIndex) {
+  JsonDocument payload;
+  payload["sensor_id"]  = SENSOR_ID;
+  payload["temperature"] = temperature;
+  payload["humidity"]    = humidity;
+  payload["heat_index"]  = heatIndex;
+
+  String body;
+  serializeJson(payload, body);
+
+  HTTPClient http;
+  http.begin(wifiClient, ANDY_API);
+  http.addHeader("Content-Type", "application/json");
+  http.POST(body);
+  http.end();
+}
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LED_OFF);
+
+  // Desabilita verificação de certificado — ver comentário acima
+  wifiClient.setInsecure();
+
+  connectWifi();
   dht.begin();
 }
 
-void loop()
-{
-  // Turn the LED on 
-  digitalWrite(LED_BUILTIN, LOW); 
-  
-  if ((WiFi.status() == WL_CONNECTED))
-  {
-
-    float humidity = dht.readHumidity();
-    float temperature = dht.readTemperature();
-    if (isnan(temperature) || isnan(humidity)) {
-      return;
-    }
-
-    HTTPClient http;
-    WiFiClient client;
-    http.begin(client, ANDY_API); // HTTP
-    http.addHeader("Content-Type", "application/json");
-
-    JsonDocument payload;
-    payload["sensor_id"] = SENSOR_ID;
-
-    // DHT22    
-    float hic = dht.computeHeatIndex(temperature, humidity, false);
-    payload["temperature"] = temperature;
-    payload["humidity"] = humidity;
-    payload["heat_index"] = hic;
-
-    // Serialize JSON document
-    String body;
-    serializeJson(payload, body);
-
-    // start connection and send HTTP header and body
-    http.POST(body);
-
-    // Free resources
-    http.end();
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWifi();
+    return;
   }
 
-  delay(500);
-  // Turn the LED off
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
 
-  delay(DHT_SAMPLING_PERIOD);
+  float temperature, humidity, heatIndex;
+  if (readSensor(temperature, humidity, heatIndex)) {
+    sendReading(temperature, humidity, heatIndex);
+  }
+
+  digitalWrite(LED_BUILTIN, LED_OFF);
+
+  delay(SAMPLING_INTERVAL_MS);
 }

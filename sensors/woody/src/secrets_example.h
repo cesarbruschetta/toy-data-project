@@ -1,8 +1,16 @@
 #ifndef SECRETS_H
 #define SECRETS_H
 
-const char* WIFI_SSID = "";
+// Wi-Fi
+const char* WIFI_SSID     = "";
 const char* WIFI_PASSWORD = "";
-const char* SENSOR_ID = "";
+
+// Identificador único deste sensor — aparece no campo sensor_id dos dados
+const char* SENSOR_ID = "woody";
+
+// Endpoint do API Gateway AWS
+// Obtenha após o terraform apply: make infra-api-url
+// Se tiver custom domain configurado: https://andy-api.k8s.your-domain.com/temperature
+const char* ANDY_API = "https://<id>.execute-api.us-east-1.amazonaws.com/v1/temperature";
 
 #endif

@@ -33,3 +33,14 @@ variable "hamm_schedule_expression" {
   type        = string
   default     = "rate(6 hour)"
 }
+
+variable "custom_domain" {
+  description = <<-EOT
+    Custom domain for the Andy API (e.g. "andy-api.k8s.our-cluster.ovh").
+    Leave empty to use only the default API Gateway URL.
+    When set, an ACM certificate is created and two DNS records must be
+    configured manually in the OVH panel after the first terraform apply.
+  EOT
+  type        = string
+  default     = "andy-api.k8s.our-cluster.ovh"
+}

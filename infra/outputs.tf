@@ -1,11 +1,26 @@
 output "api_gateway_url" {
-  description = "Base URL of the API Gateway"
+  description = "Base URL of the API Gateway (default AWS domain)"
   value       = module.api_gateway.api_url
 }
 
 output "api_temperature_endpoint" {
-  description = "Full URL for POST /temperature"
+  description = "Full URL for POST /temperature (default AWS domain)"
   value       = "${module.api_gateway.api_url}/temperature"
+}
+
+output "custom_domain_url" {
+  description = "Custom domain URL — empty if custom_domain was not configured"
+  value       = module.api_gateway.custom_domain_url
+}
+
+output "custom_domain_target" {
+  description = "CNAME target to configure in OVH DNS for the custom domain"
+  value       = module.api_gateway.custom_domain_target
+}
+
+output "acm_validation_cname" {
+  description = "CNAME record to create in OVH to validate the ACM certificate"
+  value       = module.api_gateway.acm_validation_cname
 }
 
 output "sns_topic_arn" {

@@ -85,6 +85,7 @@ module "api_gateway" {
   aws_account_id         = data.aws_caller_identity.current.account_id
   andy_lambda_arn        = module.lambda.andy_lambda_arn
   andy_lambda_invoke_arn = module.lambda.andy_lambda_invoke_arn
+  custom_domain          = var.custom_domain
 }
 
 module "glue" {

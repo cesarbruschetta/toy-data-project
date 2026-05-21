@@ -80,7 +80,7 @@ void sendReading(
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LED_OFF);
+  digitalWrite(LED_BUILTIN, LED_OFF); // apagado permanentemente
 
   // Desabilita verificação de certificado — ver comentário acima
   wifiClient.setInsecure();
@@ -110,11 +110,8 @@ void loop() {
     return;
   }
 
-  digitalWrite(LED_BUILTIN, LED_ON);
-
   float temperature, humidity, heatIndex;
   if (!readDHT(temperature, humidity, heatIndex)) {
-    digitalWrite(LED_BUILTIN, LED_OFF);
     delay(SAMPLING_INTERVAL_MS);
     return;
   }
@@ -122,13 +119,11 @@ void loop() {
   float pressure = 0, altitude = 0, temperatureBmp = 0;
   if (bmpAvailable && bmp.takeForcedMeasurement()) {
     temperatureBmp = bmp.readTemperature();
-    pressure       = bmp.readPressure() / 100.0F; // Pa → hPa
+    pressure       = bmp.readPressure() / 100.0F;
     altitude       = bmp.readAltitude(SEALEVELPRESSURE_HPA);
   }
 
   sendReading(temperature, humidity, heatIndex, pressure, altitude, temperatureBmp);
-
-  digitalWrite(LED_BUILTIN, LED_OFF);
 
   delay(SAMPLING_INTERVAL_MS);
 }

@@ -60,7 +60,7 @@ void sendReading(float temperature, float humidity, float heatIndex) {
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LED_OFF);
+  digitalWrite(LED_BUILTIN, LED_OFF); // apagado permanentemente
 
   // Desabilita verificação de certificado — ver comentário acima
   wifiClient.setInsecure();
@@ -75,14 +75,10 @@ void loop() {
     return;
   }
 
-  digitalWrite(LED_BUILTIN, LED_ON);
-
   float temperature, humidity, heatIndex;
   if (readSensor(temperature, humidity, heatIndex)) {
     sendReading(temperature, humidity, heatIndex);
   }
-
-  digitalWrite(LED_BUILTIN, LED_OFF);
 
   delay(SAMPLING_INTERVAL_MS);
 }

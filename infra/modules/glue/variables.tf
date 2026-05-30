@@ -6,17 +6,17 @@ variable "glue_database_name" {
   type = string
 }
 
-variable "data_lake_bucket" {
-  description = "Name of the S3 data lake bucket"
+variable "s3_tables_catalog_arn" {
+  description = "ARN of the S3 Tables Table Bucket (Iceberg catalog)"
   type        = string
 }
 
-variable "raw_prefix" {
-  description = "S3 prefix for raw zone"
+variable "s3_tables_namespace" {
+  description = "Namespace in S3 Tables (e.g. 'raw')"
   type        = string
 }
 
-variable "topic_name" {
-  description = "Topic/stream name used as S3 path segment"
+variable "s3_tables_table_arn" {
+  description = "ARN of the sensor_readings table in S3 Tables"
   type        = string
 }

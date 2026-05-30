@@ -55,6 +55,11 @@ resource "aws_iam_role" "hamm_lambda" {
       }
     ]
   })
+
+  # Tag usada para autorização na policy do S3 Tables bucket
+  tags = {
+    Project = var.project_name
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "hamm_basic_execution" {
@@ -84,23 +89,46 @@ resource "aws_iam_role_policy" "hamm_sqs_consume" {
   })
 }
 
-resource "aws_iam_role_policy" "hamm_s3_write" {
-  name = "hamm-s3-write"
+# ─── Hamm S3 Tables permissions (Iceberg) ────────────────────────────────────
+
+resource "aws_iam_role_policy" "hamm_s3_tables" {
+  name = "hamm-s3-tables-write"
   role = aws_iam_role.hamm_lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3TablesAccess"
         Effect = "Allow"
         Action = [
-          "s3:PutObject",
+          "s3tables:GetTable",
+          "s3tables:GetTableMetadata",
+          "s3tables:GetTableData",
+          "s3tables:PutTableData",
+          "s3tables:UpdateTableMetadata",
+          "s3tables:CreateTable",
+          "s3tables:GetNamespace",
+          "s3tables:GetTableBucket"
+        ]
+        Resource = [
+          var.s3_tables_bucket_arn,
+          "${var.s3_tables_bucket_arn}/*"
+        ]
+      },
+      {
+        Sid    = "S3TablesUnderlyingStorage"
+        Effect = "Allow"
+        Action = [
           "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
           "s3:ListBucket"
         ]
         Resource = [
-          var.data_lake_bucket,
-          "${var.data_lake_bucket}/*"
+          # S3 Tables usa um bucket gerenciado internamente
+          "arn:aws:s3:::*--table--*",
+          "arn:aws:s3:::*--table--*/*"
         ]
       }
     ]
@@ -124,6 +152,11 @@ resource "aws_iam_role" "athena" {
       }
     ]
   })
+
+  # Tag usada para autorização na policy do S3 Tables bucket
+  tags = {
+    Project = var.project_name
+  }
 }
 
 resource "aws_iam_role_policy" "athena_access" {
@@ -134,17 +167,36 @@ resource "aws_iam_role_policy" "athena_access" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3TablesRead"
+        Effect = "Allow"
+        Action = [
+          "s3tables:GetTable",
+          "s3tables:GetTableMetadata",
+          "s3tables:GetTableData",
+          "s3tables:GetNamespace",
+          "s3tables:GetTableBucket",
+          "s3tables:ListTables",
+          "s3tables:ListNamespaces"
+        ]
+        Resource = [
+          var.s3_tables_bucket_arn,
+          "${var.s3_tables_bucket_arn}/*"
+        ]
+      },
+      {
+        Sid    = "S3TablesUnderlyingStorageRead"
         Effect = "Allow"
         Action = [
           "s3:GetObject",
           "s3:ListBucket"
         ]
         Resource = [
-          var.data_lake_bucket,
-          "${var.data_lake_bucket}/*"
+          "arn:aws:s3:::*--table--*",
+          "arn:aws:s3:::*--table--*/*"
         ]
       },
       {
+        Sid    = "AthenaResultsBucket"
         Effect = "Allow"
         Action = [
           "s3:PutObject",

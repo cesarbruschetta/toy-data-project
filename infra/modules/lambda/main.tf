@@ -46,7 +46,7 @@ resource "aws_cloudwatch_log_group" "andy" {
 
 resource "aws_lambda_function" "hamm" {
   function_name = "${var.project_name}-hamm"
-  description   = "Drains SQS queue on schedule and writes batched data to S3"
+  description   = "Drains SQS queue on schedule and writes to Iceberg table (S3 Tables)"
 
   filename         = data.archive_file.hamm.output_path
   source_code_hash = data.archive_file.hamm.output_base64sha256
@@ -58,15 +58,19 @@ resource "aws_lambda_function" "hamm" {
   # Timeout generoso — drena a fila inteira a cada execução
   timeout = 300
 
-  # Concorrência 1 — evita race condition no S3
+  # Concorrência 1 — evita race condition no Iceberg
   reserved_concurrent_executions = 1
+
+  # Mais memória para PyArrow/PyIceberg
+  memory_size = 512
 
   environment {
     variables = {
-      DATA_LAKE_BUCKET = var.data_lake_bucket
-      RAW_PREFIX       = var.raw_prefix
-      SQS_QUEUE_URL    = var.sqs_queue_url
-      SQS_BATCH_SIZE   = "10"
+      S3_TABLES_ARN       = var.s3_tables_arn
+      S3_TABLES_NAMESPACE = var.s3_tables_namespace
+      S3_TABLES_TABLE     = var.s3_tables_table
+      SQS_QUEUE_URL       = var.sqs_queue_url
+      SQS_BATCH_SIZE      = "10"
     }
   }
 

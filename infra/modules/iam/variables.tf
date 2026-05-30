@@ -2,8 +2,8 @@ variable "project_name" {
   type = string
 }
 
-variable "data_lake_bucket" {
-  description = "ARN of the data lake S3 bucket"
+variable "s3_tables_bucket_arn" {
+  description = "ARN of the S3 Tables bucket (Iceberg)"
   type        = string
 }
 

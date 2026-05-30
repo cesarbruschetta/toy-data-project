@@ -2,6 +2,8 @@
 
 Terraform que provisiona toda a infraestrutura AWS do toy-data-project.
 
+> **Arquitetura atualizada**: Agora usa **Apache Iceberg** + **S3 Tables** para armazenamento otimizado.
+
 > O código das Lambdas fica em `lambdas/` na raiz do projeto.  
 > Para desenvolvimento local, use o `docker-compose.yml` com LocalStack.
 
@@ -23,17 +25,17 @@ Sensores / Simulador
        │
        │  EventBridge — rate(1 hour)
        ▼
-  Lambda Hamm
-       │  s3:PutObject — JSON Lines, 1 arquivo por partição por execução
+  Lambda Hamm (PyIceberg + PyArrow)
+       │  Iceberg append
        ▼
-  S3 Data Lake
-  └── raw/toydata-topic-temperature-v1/dt=YYYY-MM-DD/*.jsonl
+  S3 Tables (Iceberg)
+  └── raw.sensor_readings (Parquet comprimido)
        │
        ▼
-  Glue Catalog (Partition Projection — sem crawler)
+  Glue Catalog (Federated Database)
        │
        ▼
-  Athena (workgroup + 4 named queries)
+  Athena (queries + time travel + snapshots)
 ```
 
 ---
@@ -43,12 +45,26 @@ Sensores / Simulador
 | Módulo | O que provisiona |
 |---|---|
 | `modules/api_gateway` | REST API + stage `v1` + validação de schema JSON + throttling |
-| `modules/lambda` | Lambda Andy + Lambda Hamm + EventBridge schedule |
+| `modules/lambda` | Lambda Andy + Lambda Hamm (PyIceberg) + EventBridge schedule |
 | `modules/messaging` | SNS topic + SQS queue + Dead Letter Queue |
-| `modules/storage` | S3 data lake + S3 athena results (lifecycle, encryption, versioning) |
-| `modules/glue` | Glue database + tabela `sensor_readings` com Partition Projection |
-| `modules/athena` | Workgroup + 4 named queries prontas |
-| `modules/iam` | IAM roles para Lambda Andy, Lambda Hamm e Athena |
+| `modules/s3_tables` | S3 Table Bucket (Iceberg) + tabela sensor_readings + Athena results bucket |
+| `modules/glue` | Federated database (S3 Tables) + conexão + tabela Iceberg |
+| `modules/athena` | Workgroup + 8 named queries (incluindo time travel) |
+| `modules/iam` | IAM roles com permissões S3 Tables |
+
+---
+
+## Vantagens do Iceberg + S3 Tables
+
+| Feature | JSON Lines (antes) | Iceberg + S3 Tables (agora) |
+|---|---|---|
+| Compressão | Nenhuma | Parquet Snappy (~10x menor) |
+| Schema Evolution | Manual | Nativo |
+| Time Travel | ❌ | ✅ |
+| ACID Transactions | ❌ | ✅ |
+| Partition Pruning | Partition Projection | Iceberg metadata |
+| Compaction | Manual (Glue Job) | Automático |
+| Query Performance | Scan completo | Predicate pushdown |
 
 ---
 
@@ -56,7 +72,7 @@ Sensores / Simulador
 
 - Terraform >= 1.6
 - AWS CLI configurado (`aws configure`)
-- Permissões: IAM, Lambda, API Gateway, SNS, SQS, S3, Glue, Athena, EventBridge, CloudWatch
+- Permissões: IAM, Lambda, API Gateway, SNS, SQS, S3, S3 Tables, Glue, Athena, EventBridge, CloudWatch
 
 ---
 
@@ -90,8 +106,6 @@ Todas têm valores padrão. Para sobrescrever, crie `infra/terraform.tfvars`:
 aws_region               = "us-east-1"
 project_name             = "toy-data-project"
 glue_database_name       = "toy_data_raw"
-topic_name               = "toydata-topic-temperature-v1"
-raw_prefix               = "raw"
 hamm_schedule_expression = "rate(1 hour)"
 
 # Opcional — custom domain para o API Gateway (ver seção abaixo)

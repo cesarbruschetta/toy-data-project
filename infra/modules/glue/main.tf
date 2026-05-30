@@ -1,65 +1,69 @@
-locals {
-  s3_raw_path = "s3://${var.data_lake_bucket}/${var.raw_prefix}/${var.topic_name}/"
+# ─── Glue Database com Federated Catalog (S3 Tables) ─────────────────────────
+#
+# Com S3 Tables + Iceberg, o catálogo da tabela é gerenciado pelo próprio S3 Tables.
+# O Glue registra uma "federated database" que aponta para o namespace do S3 Tables.
+# O Athena consulta usando: SELECT * FROM "database"."table"
+#
+# Vantagens:
+# - Schema gerenciado automaticamente pelo Iceberg
+# - Compaction automático pelo S3 Tables
+# - Time Travel nativo
+# - ACID transactions
 
-  # Data de início para o Partition Projection — ajuste conforme necessário
-  projection_start_date = "2025-01-01"
-}
-
-# ─── Glue Database ────────────────────────────────────────────────────────────
+# ─── Glue Catalog Database (Federated com S3 Tables) ─────────────────────────
 
 resource "aws_glue_catalog_database" "toy_data" {
   name        = var.glue_database_name
-  description = "Raw sensor data from toy-data-project IoT pipeline"
+  description = "Iceberg tables from S3 Tables — toy-data-project IoT pipeline"
 
-  location_uri = "s3://${var.data_lake_bucket}/${var.raw_prefix}/"
+  # Federated database apontando para S3 Tables
+  federated_database {
+    connection_name = aws_glue_connection.s3_tables.name
+    identifier      = var.s3_tables_namespace
+  }
 }
 
-# ─── Glue Table com Partition Projection ─────────────────────────────────────
+# ─── Glue Connection para S3 Tables ──────────────────────────────────────────
+
+resource "aws_glue_connection" "s3_tables" {
+  name            = "${var.project_name}-s3-tables-connection"
+  connection_type = "FEDERATED"
+
+  connection_properties = {
+    # ARN do Table Bucket no formato esperado pelo Glue
+    CONNECTOR_URL = var.s3_tables_catalog_arn
+  }
+
+  physical_connection_requirements {
+    availability_zone      = null
+    security_group_id_list = []
+    subnet_id              = null
+  }
+}
+
+# ─── Glue Catalog Table (referência à tabela Iceberg no S3 Tables) ────────────
 #
-# Partition Projection elimina a necessidade do Glue Crawler.
-# O Athena calcula as partições diretamente a partir do range de datas,
-# sem precisar consultar o Glue Catalog para cada nova data.
-#
-# Path no S3: raw/<topic>/dt=YYYY-MM-DD/<arquivo>.jsonl
+# Esta entrada no Glue Catalog permite que o Athena encontre a tabela
+# usando a sintaxe padrão: SELECT * FROM database.table
 
 resource "aws_glue_catalog_table" "sensor_readings" {
   name          = "sensor_readings"
   database_name = aws_glue_catalog_database.toy_data.name
-  description   = "Raw sensor readings — partitioned by date via Partition Projection"
+  description   = "Iceberg table for raw sensor readings — managed by S3 Tables"
 
   table_type = "EXTERNAL_TABLE"
 
+  # Parâmetros Iceberg
   parameters = {
-    "classification"              = "json"
-    "compressionType"             = "none"
-    "typeOfData"                  = "file"
-    "EXTERNAL"                    = "TRUE"
-
-    # ── Partition Projection ─────────────────────────────────────────────────
-    "projection.enabled"          = "true"
-    "projection.dt.type"          = "date"
-    "projection.dt.format"        = "yyyy-MM-dd"
-    "projection.dt.range"         = "${local.projection_start_date},NOW"
-    "projection.dt.interval"      = "1"
-    "projection.dt.interval.unit" = "DAYS"
-
-    # Template do path S3 para cada partição
-    "storage.location.template"   = "${local.s3_raw_path}dt=$${dt}/"
+    "table_type"           = "ICEBERG"
+    "metadata_location"    = var.s3_tables_table_arn
+    "classification"       = "iceberg"
   }
 
+  # O schema é gerenciado pelo Iceberg — definimos apenas a estrutura base
+  # O Iceberg permite schema evolution sem precisar atualizar o Glue
   storage_descriptor {
-    location      = local.s3_raw_path
-    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
-    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
-
-    ser_de_info {
-      name                  = "JsonSerDe"
-      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
-      parameters = {
-        "serialization.format"  = "1"
-        "ignore.malformed.json" = "TRUE"
-      }
-    }
+    location = var.s3_tables_table_arn
 
     columns {
       name    = "sensor_id"
@@ -106,19 +110,22 @@ resource "aws_glue_catalog_table" "sensor_readings" {
     columns {
       name    = "event_timestamp"
       type    = "bigint"
-      comment = "Unix timestamp in milliseconds when the event was received by Andy API"
+      comment = "Unix timestamp in milliseconds when the event was received"
     }
 
     columns {
       name    = "ingested_at"
-      type    = "string"
-      comment = "ISO 8601 datetime when the record was written to S3 by Hamm Lambda"
+      type    = "timestamp"
+      comment = "Timestamp when the record was written to S3 Tables"
+    }
+
+    columns {
+      name    = "dt"
+      type    = "date"
+      comment = "Partition date (YYYY-MM-DD) — Iceberg hidden partition"
     }
   }
 
-  partition_keys {
-    name    = "dt"
-    type    = "date"
-    comment = "Partition date (YYYY-MM-DD) — managed by Partition Projection"
-  }
+  # Iceberg gerencia partições automaticamente
+  # Não precisamos de partition_keys explícitas
 }

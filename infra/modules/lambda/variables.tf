@@ -27,16 +27,6 @@ variable "sqs_queue_url" {
   type        = string
 }
 
-variable "data_lake_bucket" {
-  description = "Name of the S3 data lake bucket"
-  type        = string
-}
-
-variable "raw_prefix" {
-  description = "S3 prefix for raw zone"
-  type        = string
-}
-
 variable "lambdas_source_dir" {
   description = "Path to the lambdas source directory"
   type        = string
@@ -46,4 +36,21 @@ variable "hamm_schedule_expression" {
   description = "EventBridge schedule expression for the Hamm drain job"
   type        = string
   default     = "rate(1 hour)"
+}
+
+# ─── S3 Tables / Iceberg ──────────────────────────────────────────────────────
+
+variable "s3_tables_arn" {
+  description = "ARN of the S3 Tables bucket (Iceberg catalog)"
+  type        = string
+}
+
+variable "s3_tables_namespace" {
+  description = "Namespace in S3 Tables (e.g. 'raw')"
+  type        = string
+}
+
+variable "s3_tables_table" {
+  description = "Name of the Iceberg table in S3 Tables"
+  type        = string
 }

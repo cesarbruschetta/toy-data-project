@@ -109,7 +109,7 @@ glue_database_name       = "toy_data_raw"
 hamm_schedule_expression = "rate(1 hour)"
 
 # Opcional — custom domain para o API Gateway (ver seção abaixo)
-custom_domain            = "andy-api.k8s.our-cluster.ovh"
+custom_domain            = "andy-api.aws.our-cluster.ovh"
 ```
 
 ---
@@ -121,13 +121,13 @@ Por padrão o API Gateway expõe um URL gerado pela AWS:
 https://<id>.execute-api.us-east-1.amazonaws.com/v1/temperature
 ```
 
-Para usar um domínio próprio como `andy-api.k8s.our-cluster.ovh/temperature`, defina `custom_domain` no `terraform.tfvars` e siga o processo de dois passos abaixo.
+Para usar um domínio próprio como `andy-api.aws.our-cluster.ovh/temperature`, defina `custom_domain` no `terraform.tfvars` e siga o processo de dois passos abaixo.
 
 ### Passo 1 — Primeiro apply (cria o certificado)
 
 ```bash
 # terraform.tfvars
-custom_domain = "andy-api.k8s.our-cluster.ovh"
+custom_domain = "andy-api.aws.our-cluster.ovh"
 ```
 
 ```bash
@@ -143,7 +143,7 @@ terraform -chdir=infra output -json acm_validation_cname
 Saída esperada:
 ```json
 {
-  "name":  "_acme-challenge.andy-api.k8s.our-cluster.ovh.",
+  "name":  "_acme-challenge.andy-api.aws.our-cluster.ovh.",
   "value": "xxxxxxxxxxxx.acm-validations.aws."
 }
 ```
@@ -178,7 +178,7 @@ Crie o segundo CNAME no OVH:
 Após a propagação DNS (~5 minutos), o endpoint estará disponível em:
 
 ```
-https://andy-api.k8s.our-cluster.ovh/temperature
+https://andy-api.aws.our-cluster.ovh/temperature
 ```
 
 ### Resumo dos registros DNS no OVH

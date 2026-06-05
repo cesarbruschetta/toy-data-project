@@ -1,25 +1,23 @@
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = "~> 1.14.9"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.50"
+      version = "~> 6.48.0"
     }
     archive = {
       source  = "hashicorp/archive"
-      version = "~> 2.4"
+      version = "~> 2.8.0"
     }
   }
 
-  # Backend remoto — descomente e ajuste antes do primeiro apply em produção
-  # backend "s3" {
-  #   bucket         = "toy-data-project-tfstate"
-  #   key            = "terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "toy-data-project-tflock"
-  #   encrypt        = true
-  # }
+  backend "s3" {
+    bucket  = "dev-643626749185-project-tfstate"
+    key     = "terraform/toy-data-project.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+  }
 }
 
 provider "aws" {
@@ -57,12 +55,12 @@ module "messaging" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name          = var.project_name
-  s3_tables_bucket_arn  = module.s3_tables.table_bucket_arn
-  athena_bucket         = module.s3_tables.athena_results_bucket_arn
-  sns_topic_arn         = module.messaging.sns_topic_arn
-  sqs_queue_arn         = module.messaging.sqs_queue_arn
-  glue_database_name    = var.glue_database_name
+  project_name         = var.project_name
+  s3_tables_bucket_arn = module.s3_tables.table_bucket_arn
+  athena_bucket        = module.s3_tables.athena_results_bucket_arn
+  sns_topic_arn        = module.messaging.sns_topic_arn
+  sqs_queue_arn        = module.messaging.sqs_queue_arn
+  glue_database_name   = var.glue_database_name
 }
 
 module "lambda" {

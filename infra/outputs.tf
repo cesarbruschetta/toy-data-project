@@ -75,11 +75,6 @@ output "glue_database_name" {
   value       = module.glue.glue_database_name
 }
 
-output "glue_database_name" {
-  description = "Name of the Glue catalog database"
-  value       = module.glue.glue_database_name
-}
-
 output "glue_table_name" {
   description = "Name of the Glue catalog table"
   value       = module.glue.glue_table_name

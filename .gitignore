@@ -10,3 +10,4 @@ dev/tmp/*
 .vscode/ipch
 
 *secrets.h
+.tool-versions

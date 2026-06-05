@@ -1,43 +1,29 @@
-# ─── Glue Database com Federated Catalog (S3 Tables) ─────────────────────────
+# ─── Glue Database para S3 Tables ────────────────────────────────────────────
 #
-# Com S3 Tables + Iceberg, o catálogo da tabela é gerenciado pelo próprio S3 Tables.
-# O Glue registra uma "federated database" que aponta para o namespace do S3 Tables.
-# O Athena consulta usando: SELECT * FROM "database"."table"
+# S3 Tables + Iceberg gerencia o catálogo automaticamente.
+# Para consultas no Athena, use o catálogo nativo do S3 Tables:
 #
-# Vantagens:
+#   SELECT * FROM "s3tablescatalog"."namespace"."table_name"
+#
+# Este database Glue é apenas para referência/documentação e queries que
+# precisem de um database tradicional no Glue Data Catalog.
+#
+# Vantagens do S3 Tables:
 # - Schema gerenciado automaticamente pelo Iceberg
-# - Compaction automático pelo S3 Tables
+# - Compaction automático
 # - Time Travel nativo
 # - ACID transactions
 
-# ─── Glue Catalog Database (Federated com S3 Tables) ─────────────────────────
+# ─── Glue Catalog Database ───────────────────────────────────────────────────
 
 resource "aws_glue_catalog_database" "toy_data" {
   name        = var.glue_database_name
-  description = "Iceberg tables from S3 Tables — toy-data-project IoT pipeline"
+  description = "Reference database for toy-data-project IoT pipeline. Use S3 Tables catalog for Iceberg queries."
 
-  # Federated database apontando para S3 Tables
-  federated_database {
-    connection_name = aws_glue_connection.s3_tables.name
-    identifier      = var.s3_tables_namespace
-  }
-}
-
-# ─── Glue Connection para S3 Tables ──────────────────────────────────────────
-
-resource "aws_glue_connection" "s3_tables" {
-  name            = "${var.project_name}-s3-tables-connection"
-  connection_type = "FEDERATED"
-
-  connection_properties = {
-    # ARN do Table Bucket no formato esperado pelo Glue
-    CONNECTOR_URL = var.s3_tables_catalog_arn
-  }
-
-  physical_connection_requirements {
-    availability_zone      = null
-    security_group_id_list = []
-    subnet_id              = null
+  # Parâmetros para documentar a localização real dos dados
+  parameters = {
+    "s3_tables_catalog_arn" = var.s3_tables_catalog_arn
+    "s3_tables_namespace"   = var.s3_tables_namespace
   }
 }
 
@@ -55,9 +41,9 @@ resource "aws_glue_catalog_table" "sensor_readings" {
 
   # Parâmetros Iceberg
   parameters = {
-    "table_type"           = "ICEBERG"
-    "metadata_location"    = var.s3_tables_table_arn
-    "classification"       = "iceberg"
+    "table_type"        = "ICEBERG"
+    "metadata_location" = var.s3_tables_table_arn
+    "classification"    = "iceberg"
   }
 
   # O schema é gerenciado pelo Iceberg — definimos apenas a estrutura base

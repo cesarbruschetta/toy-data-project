@@ -38,9 +38,9 @@ output "acm_validation_cname" {
   value = (
     local.enable_custom_domain
     ? {
-        name  = tolist(aws_acm_certificate.andy_api[0].domain_validation_options)[0].resource_record_name
-        value = tolist(aws_acm_certificate.andy_api[0].domain_validation_options)[0].resource_record_value
-      }
+      name  = tolist(aws_acm_certificate.andy_api[0].domain_validation_options)[0].resource_record_name
+      value = tolist(aws_acm_certificate.andy_api[0].domain_validation_options)[0].resource_record_value
+    }
     : null
   )
 }

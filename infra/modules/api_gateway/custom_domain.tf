@@ -14,8 +14,8 @@
 #
 #  Tipo  | Nome                              | Valor
 #  ───── | ──────────────────────────────── | ──────────────────────────────────
-#  CNAME | _acme-challenge.andy-api.k8s     | <acm_validation_cname>
-#  CNAME | andy-api.k8s                     | <custom_domain_target>
+#  CNAME | _acme-challenge.andy-api.aws     | <acm_validation_cname>
+#  CNAME | andy-api.aws                     | <custom_domain_target>
 #
 # Este bloco só é criado quando var.custom_domain != "".
 # Para desabilitar, deixe custom_domain vazio no terraform.tfvars.
@@ -76,6 +76,6 @@ resource "aws_api_gateway_base_path_mapping" "andy_api" {
   domain_name = aws_api_gateway_domain_name.andy_api[0].domain_name
 
   # base_path vazio → o domínio raiz mapeia direto para o stage
-  # ex: andy-api.k8s.our-cluster.ovh/temperature (sem prefixo /v1/)
+  # ex: andy-api.aws.our-cluster.ovh/temperature (sem prefixo /v1/)
   base_path = ""
 }

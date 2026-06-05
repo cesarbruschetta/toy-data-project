@@ -58,8 +58,9 @@ resource "aws_lambda_function" "hamm" {
   # Timeout generoso — drena a fila inteira a cada execução
   timeout = 300
 
-  # Concorrência 1 — evita race condition no Iceberg
-  reserved_concurrent_executions = 1
+  # Não reservar concorrência — usa o pool da conta
+  # Se precisar limitar a 1 execução simultânea, use -1 (unreserved) + SQS visibility timeout
+  reserved_concurrent_executions = -1
 
   # Mais memória para PyArrow/PyIceberg
   memory_size = 512

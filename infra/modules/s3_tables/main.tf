@@ -15,15 +15,15 @@ resource "aws_s3tables_table_bucket" "data_lake" {
   name = "${var.project_name}-data-lake"
 
   # Maintenance é automático no S3 Tables
-  maintenance_configuration {
-    iceberg_unreferenced_file_removal {
-      status = "enabled"
-      settings {
-        non_current_days = 7
-        unreferenced_days = 3
-      }
-    }
-  }
+  # maintenance_configuration {
+  #   iceberg_unreferenced_file_removal {
+  #     status = "enabled"
+  #     settings {
+  #       non_current_days = 7
+  #       unreferenced_days = 3
+  #     }
+  #   }
+  # }
 }
 
 # ─── Namespace (equivalente a database/schema) ───────────────────────────────
@@ -51,7 +51,7 @@ resource "aws_s3tables_table" "sensor_readings" {
 
 resource "aws_s3tables_table_bucket_policy" "data_lake" {
   table_bucket_arn = aws_s3tables_table_bucket.data_lake.arn
-  
+
   resource_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

@@ -6,7 +6,8 @@ A cada execução, drena TODAS as mensagens disponíveis na fila SQS e as
 grava na tabela Iceberg no S3 Tables.
 
 Arquitetura:
-- Usa PyIceberg para escrever diretamente na tabela Iceberg
+- Usa PyIceberg (REST catalog) para escrever diretamente na tabela Iceberg
+- Conecta ao S3 Tables via REST endpoint com autenticação SigV4
 - S3 Tables gerencia compaction, snapshots e metadata automaticamente
 - Particionamento por data (dt) é feito pelo Iceberg hidden partitioning
 
@@ -21,7 +22,6 @@ Vantagens sobre JSON Lines:
 import json
 import logging
 import os
-from collections import defaultdict
 from datetime import datetime, timezone, date
 
 import boto3
@@ -49,6 +49,7 @@ S3_TABLES_NAMESPACE = os.environ.get("S3_TABLES_NAMESPACE", "raw")
 S3_TABLES_TABLE = os.environ.get("S3_TABLES_TABLE", "sensor_readings")
 SQS_QUEUE_URL = os.environ["SQS_QUEUE_URL"]
 SQS_BATCH_SIZE = int(os.environ.get("SQS_BATCH_SIZE", "10"))
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 # Máximo de mensagens por execução (evita timeout)
 MAX_MESSAGES_PER_RUN = 5000
@@ -76,14 +77,30 @@ PARTITION_SPEC = PartitionSpec(
 
 def _get_iceberg_catalog():
     """
-    Carrega o catálogo Iceberg apontando para S3 Tables.
+    Carrega o catálogo Iceberg apontando para S3 Tables via REST endpoint + SigV4.
+
+    Credenciais são passadas explicitamente para que tanto o catálogo REST
+    quanto o PyArrow file I/O (que acessa os arquivos Parquet/Avro no S3)
+    utilizem as mesmas credenciais assumidas pelo role da Lambda.
     """
+    session = boto3.session.Session()
+    creds = session.get_credentials().get_frozen_credentials()
+
     return load_catalog(
-        name="s3tables",
+        "s3tables",
         **{
-            "type": "s3tables",
-            "s3tables.catalog-arn": S3_TABLES_ARN,
-        }
+            "type": "rest",
+            "uri": f"https://s3tables.{AWS_REGION}.amazonaws.com/iceberg",
+            "warehouse": S3_TABLES_ARN,
+            "rest.sigv4-enabled": "true",
+            "rest.signing-name": "s3tables",
+            "rest.signing-region": AWS_REGION,
+            # Credenciais explícitas — necessário para que o PyArrow IO
+            # também assine as requests ao S3 Tables corretamente
+            "client.access-key-id": creds.access_key,
+            "client.secret-access-key": creds.secret_key,
+            "client.session-token": creds.token or "",
+        },
     )
 
 

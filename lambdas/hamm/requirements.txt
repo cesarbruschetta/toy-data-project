@@ -1,11 +1,5 @@
-# Produção — boto3 já está disponível no runtime Python da AWS Lambda
-boto3==1.34.69
+# boto3 já está incluído no runtime Python da AWS Lambda — não precisa no layer
 
-# PyIceberg para escrita em tabelas Iceberg (S3 Tables)
-pyiceberg[s3tables]==0.9.0
+# PyIceberg para escrita em tabelas Iceberg via S3 Tables REST endpoint
+pyiceberg==0.9.1
 pyarrow==18.1.0
-
-# Testes locais
-pytest==8.3.5
-pytest-mock==3.14.0
-moto[s3,sqs]==5.0.7

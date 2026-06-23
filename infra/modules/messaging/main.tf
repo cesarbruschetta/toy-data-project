@@ -47,8 +47,8 @@ resource "aws_sqs_queue" "temperature" {
   # Visibility timeout maior que o timeout da Lambda Hamm (300s)
   visibility_timeout_seconds = 360
 
-  # Mensagens ficam na fila por 4 dias se não processadas
-  message_retention_seconds = 345600
+  # Mensagens ficam na fila por 7 dias se não processadas
+  message_retention_seconds = 604800
 
   delay_seconds = 0
 

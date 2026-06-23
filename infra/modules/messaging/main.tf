@@ -3,7 +3,6 @@
 resource "aws_sns_topic" "temperature" {
   name = "${var.project_name}-temperature"
 
-  kms_master_key_id = "alias/aws/sns"
 }
 
 resource "aws_sns_topic_policy" "temperature" {
@@ -38,7 +37,6 @@ resource "aws_sqs_queue" "temperature_dlq" {
   # Mensagens ficam na DLQ por 14 dias para análise
   message_retention_seconds = 1209600
 
-  kms_master_key_id = "alias/aws/sqs"
 }
 
 # ─── SQS Queue principal ─────────────────────────────────────────────────────
@@ -53,8 +51,6 @@ resource "aws_sqs_queue" "temperature" {
   message_retention_seconds = 345600
 
   delay_seconds = 0
-
-  kms_master_key_id = "alias/aws/sqs"
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.temperature_dlq.arn

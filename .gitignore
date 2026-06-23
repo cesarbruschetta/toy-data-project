@@ -11,3 +11,12 @@ dev/tmp/*
 
 *secrets.h
 .tool-versions
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Build artifacts (layer)
+dist/

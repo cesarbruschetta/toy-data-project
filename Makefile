@@ -16,7 +16,7 @@ help: ## Mostra este menu de ajuda
 	@grep -E '^dev-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-28s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BOLD)$(CYAN)Lambdas$(RESET)"
-	@grep -E '^lambda-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-28s$(RESET) %s\n", $$1, $$2}'
+	@grep -E '^lambda-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-32s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BOLD)$(CYAN)Infra (Terraform / AWS)$(RESET)"
 	@grep -E '^infra-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-28s$(RESET) %s\n", $$1, $$2}'
@@ -72,8 +72,17 @@ lambda-setup: ## Cria virtualenvs e instala dependências de ambas as Lambdas
 	lambdas/andy/.venv/bin/pip install -q -r lambdas/andy/requirements.txt
 	@echo "$(CYAN)Configurando Hamm...$(RESET)"
 	python -m venv lambdas/hamm/.venv
-	lambdas/hamm/.venv/bin/pip install -q -r lambdas/hamm/requirements.txt
+	lambdas/hamm/.venv/bin/pip install -q -r lambdas/hamm/requirements-dev.txt
 	@echo "✓ Virtualenvs prontos"
+
+.PHONY: lambda-build-layer-hamm
+lambda-build-layer-hamm: ## Build do Lambda Layer da Hamm com PyArrow+PyIceberg (requer Docker)
+	@echo "$(CYAN)Buildando layer da Hamm via Docker...$(RESET)"
+	bash lambdas/hamm/build_layer.sh
+	@echo "$(CYAN)Copiando layer para infra/modules/lambda/dist/...$(RESET)"
+	mkdir -p infra/modules/lambda/dist
+	cp lambdas/hamm/dist/hamm_layer.zip infra/modules/lambda/dist/hamm_layer.zip
+	@echo "✓ Layer pronto em infra/modules/lambda/dist/hamm_layer.zip"
 
 .PHONY: lambda-test
 lambda-test: ## Roda os testes de ambas as Lambdas

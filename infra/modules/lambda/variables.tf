@@ -38,19 +38,14 @@ variable "hamm_schedule_expression" {
   default     = "rate(1 hour)"
 }
 
-# ─── S3 Tables / Iceberg ──────────────────────────────────────────────────────
+# ─── S3 Data Lake ─────────────────────────────────────────────────────────────
 
-variable "s3_tables_arn" {
-  description = "ARN of the S3 Tables bucket (Iceberg catalog)"
+variable "data_lake_bucket_name" {
+  description = "Name of the S3 data lake bucket (landing zone)"
   type        = string
 }
 
-variable "s3_tables_namespace" {
-  description = "Namespace in S3 Tables (e.g. 'raw')"
-  type        = string
-}
-
-variable "s3_tables_table" {
-  description = "Name of the Iceberg table in S3 Tables"
+variable "data_lake_bucket_arn" {
+  description = "ARN of the S3 data lake bucket (for IAM policies)"
   type        = string
 }

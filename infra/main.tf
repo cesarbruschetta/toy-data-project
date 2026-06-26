@@ -31,15 +31,10 @@ provider "aws" {
   }
 }
 
-# ─── Data sources ─────────────────────────────────────────────────────────────
-
-data "aws_caller_identity" "current" {}
-
 # ─── Módulos ──────────────────────────────────────────────────────────────────
 
-# S3 Tables + Iceberg (substitui o módulo storage antigo)
-module "s3_tables" {
-  source = "./modules/s3_tables"
+module "storage" {
+  source = "./modules/storage"
 
   project_name   = var.project_name
   aws_account_id = data.aws_caller_identity.current.account_id
@@ -55,12 +50,12 @@ module "messaging" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name         = var.project_name
-  s3_tables_bucket_arn = module.s3_tables.table_bucket_arn
-  athena_bucket        = module.s3_tables.athena_results_bucket_arn
-  sns_topic_arn        = module.messaging.sns_topic_arn
-  sqs_queue_arn        = module.messaging.sqs_queue_arn
-  glue_database_name   = var.glue_database_name
+  project_name              = var.project_name
+  data_lake_bucket_arn      = module.storage.data_lake_bucket_arn
+  athena_results_bucket_arn = module.storage.athena_results_bucket_arn
+  sns_topic_arn             = module.messaging.sns_topic_arn
+  sqs_queue_arn             = module.messaging.sqs_queue_arn
+  glue_database_name        = var.glue_database_name
 }
 
 module "lambda" {
@@ -74,11 +69,8 @@ module "lambda" {
   sqs_queue_url            = module.messaging.sqs_queue_url
   lambdas_source_dir       = "${path.module}/../lambdas"
   hamm_schedule_expression = var.hamm_schedule_expression
-
-  # Iceberg / S3 Tables
-  s3_tables_arn       = module.s3_tables.table_bucket_arn
-  s3_tables_namespace = module.s3_tables.namespace
-  s3_tables_table     = module.s3_tables.table_name
+  data_lake_bucket_name    = module.storage.data_lake_bucket_name
+  data_lake_bucket_arn     = module.storage.data_lake_bucket_arn
 }
 
 module "api_gateway" {
@@ -96,15 +88,17 @@ module "glue" {
 
   project_name          = var.project_name
   glue_database_name    = var.glue_database_name
-  s3_tables_catalog_arn = module.s3_tables.table_bucket_arn
-  s3_tables_namespace   = module.s3_tables.namespace
-  s3_tables_table_arn   = module.s3_tables.table_arn
+  data_lake_bucket_name = module.storage.data_lake_bucket_name
 }
 
 module "athena" {
   source = "./modules/athena"
 
   project_name          = var.project_name
-  athena_results_bucket = module.s3_tables.athena_results_bucket_name
+  athena_results_bucket = module.storage.athena_results_bucket_name
   glue_database_name    = var.glue_database_name
 }
+
+# ─── Data sources ─────────────────────────────────────────────────────────────
+
+data "aws_caller_identity" "current" {}

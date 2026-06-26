@@ -38,40 +38,18 @@ output "sqs_dlq_url" {
   value       = module.messaging.sqs_dlq_url
 }
 
-# ─── S3 Tables / Iceberg outputs ──────────────────────────────────────────────
-
-output "s3_tables_bucket_arn" {
-  description = "ARN of the S3 Tables bucket (Iceberg catalog)"
-  value       = module.s3_tables.table_bucket_arn
-}
-
-output "s3_tables_bucket_name" {
-  description = "Name of the S3 Tables bucket"
-  value       = module.s3_tables.table_bucket_name
-}
-
-output "iceberg_namespace" {
-  description = "Iceberg namespace for raw data"
-  value       = module.s3_tables.namespace
-}
-
-output "iceberg_table_name" {
-  description = "Name of the sensor_readings Iceberg table"
-  value       = module.s3_tables.table_name
-}
-
-output "iceberg_table_arn" {
-  description = "Full ARN of the sensor_readings Iceberg table"
-  value       = module.s3_tables.table_arn
+output "data_lake_bucket_name" {
+  description = "Name of the S3 data lake bucket (landing zone)"
+  value       = module.storage.data_lake_bucket_name
 }
 
 output "athena_results_bucket" {
   description = "Name of the S3 bucket for Athena query results"
-  value       = module.s3_tables.athena_results_bucket_name
+  value       = module.storage.athena_results_bucket_name
 }
 
 output "glue_database_name" {
-  description = "Name of the Glue database (federated with S3 Tables)"
+  description = "Name of the Glue database"
   value       = module.glue.glue_database_name
 }
 

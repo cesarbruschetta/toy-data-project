@@ -1,117 +1,84 @@
-# ─── Glue Database para S3 Tables ────────────────────────────────────────────
-#
-# S3 Tables + Iceberg gerencia o catálogo automaticamente.
-# Para consultas no Athena, use o catálogo nativo do S3 Tables:
-#
-#   SELECT * FROM "s3tablescatalog"."namespace"."table_name"
-#
-# Este database Glue é apenas para referência/documentação e queries que
-# precisem de um database tradicional no Glue Data Catalog.
-#
-# Vantagens do S3 Tables:
-# - Schema gerenciado automaticamente pelo Iceberg
-# - Compaction automático
-# - Time Travel nativo
-# - ACID transactions
-
-# ─── Glue Catalog Database ───────────────────────────────────────────────────
+# ─── Glue Database ───────────────────────────────────────────────────────────
 
 resource "aws_glue_catalog_database" "toy_data" {
   name        = var.glue_database_name
-  description = "Reference database for toy-data-project IoT pipeline. Use S3 Tables catalog for Iceberg queries."
-
-  # Parâmetros para documentar a localização real dos dados
-  parameters = {
-    "s3_tables_catalog_arn" = var.s3_tables_catalog_arn
-    "s3_tables_namespace"   = var.s3_tables_namespace
-  }
+  description = "Landing zone — raw IoT sensor data in JSON Lines (S3 data lake)"
 }
 
-# ─── Glue Catalog Table (referência à tabela Iceberg no S3 Tables) ────────────
-#
-# Esta entrada no Glue Catalog permite que o Athena encontre a tabela
-# usando a sintaxe padrão: SELECT * FROM database.table
+# ─── Glue Table com Partition Projection ─────────────────────────────────────
+# Sem crawler — partições inferidas automaticamente por Partition Projection.
+# Path: s3://<bucket>/raw/toydata-topic-temperature-v1/dt=YYYY-MM-DD/
 
 resource "aws_glue_catalog_table" "sensor_readings" {
   name          = "sensor_readings"
   database_name = aws_glue_catalog_database.toy_data.name
-  description   = "Iceberg table for raw sensor readings — managed by S3 Tables"
+  description   = "Raw sensor readings — JSON Lines partitioned by dt"
 
   table_type = "EXTERNAL_TABLE"
 
-  # Parâmetros Iceberg
   parameters = {
-    "table_type"        = "ICEBERG"
-    "metadata_location" = var.s3_tables_table_arn
-    "classification"    = "iceberg"
+    "classification"                        = "json"
+    "projection.enabled"                    = "true"
+    "projection.dt.type"                    = "date"
+    "projection.dt.format"                  = "yyyy-MM-dd"
+    "projection.dt.range"                   = "2024-01-01,NOW"
+    "projection.dt.interval"                = "1"
+    "projection.dt.interval.unit"           = "DAYS"
+    "storage.location.template"             = "s3://${var.data_lake_bucket_name}/raw/toydata-topic-temperature-v1/dt=$${dt}"
   }
 
-  # O schema é gerenciado pelo Iceberg — definimos apenas a estrutura base
-  # O Iceberg permite schema evolution sem precisar atualizar o Glue
   storage_descriptor {
-    location = var.s3_tables_table_arn
+    location      = "s3://${var.data_lake_bucket_name}/raw/toydata-topic-temperature-v1/"
+    input_format  = "org.apache.hadoop.mapred.TextInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.openx.data.jsonserde.JsonSerDe"
+      parameters = {
+        "serialization.format" = "1"
+      }
+    }
 
     columns {
       name    = "sensor_id"
       type    = "string"
-      comment = "Unique identifier of the sensor"
     }
-
     columns {
-      name    = "temperature"
-      type    = "double"
-      comment = "Temperature in Celsius (DHT22)"
+      name = "temperature"
+      type = "double"
     }
-
     columns {
-      name    = "humidity"
-      type    = "double"
-      comment = "Relative humidity percentage (DHT22)"
+      name = "humidity"
+      type = "double"
     }
-
     columns {
-      name    = "heat_index"
-      type    = "double"
-      comment = "Computed heat index"
+      name = "heat_index"
+      type = "double"
     }
-
     columns {
-      name    = "pressure"
-      type    = "double"
-      comment = "Atmospheric pressure in hPa (BMP280, optional)"
+      name = "pressure"
+      type = "double"
     }
-
     columns {
-      name    = "altitude"
-      type    = "double"
-      comment = "Altitude in meters (BMP280, optional)"
+      name = "altitude"
+      type = "double"
     }
-
     columns {
-      name    = "temperature_bmp"
-      type    = "double"
-      comment = "Temperature from BMP280 sensor (optional)"
+      name = "temperature_bmp"
+      type = "double"
     }
-
     columns {
-      name    = "event_timestamp"
-      type    = "bigint"
-      comment = "Unix timestamp in milliseconds when the event was received"
+      name = "timestamp"
+      type = "bigint"
     }
-
     columns {
-      name    = "ingested_at"
-      type    = "timestamp"
-      comment = "Timestamp when the record was written to S3 Tables"
-    }
-
-    columns {
-      name    = "dt"
-      type    = "date"
-      comment = "Partition date (YYYY-MM-DD) — Iceberg hidden partition"
+      name = "ingested_at"
+      type = "string"
     }
   }
 
-  # Iceberg gerencia partições automaticamente
-  # Não precisamos de partition_keys explícitas
+  partition_keys {
+    name = "dt"
+    type = "date"
+  }
 }

@@ -11,7 +11,6 @@ data "archive_file" "hamm" {
   source_dir  = "${var.lambdas_source_dir}/hamm"
   output_path = "${path.module}/dist/hamm.zip"
 
-  # Exclui artefatos de build que não devem ir no deployment package
   excludes = [
     "dist",
     "__pycache__",
@@ -21,56 +20,6 @@ data "archive_file" "hamm" {
     ".venv",
     "build_layer.sh",
   ]
-}
-
-# ─── S3 bucket para artefatos de deploy ──────────────────────────────────────
-# Usado para upload do Lambda Layer (>70 MB — acima do limite de upload direto)
-
-resource "aws_s3_bucket" "artifacts" {
-  bucket = "${var.project_name}-lambda-artifacts"
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# Upload do layer zip para o S3
-resource "aws_s3_object" "hamm_layer" {
-  bucket = aws_s3_bucket.artifacts.id
-  key    = "layers/hamm_layer.zip"
-  source = "${path.module}/dist/hamm_layer.zip"
-  etag   = filemd5("${path.module}/dist/hamm_layer.zip")
-}
-
-# ─── Lambda Layer — dependências nativas da Hamm ─────────────────────────────
-# Build via: make lambda-build-layer-hamm (requer Docker)
-
-resource "aws_lambda_layer_version" "hamm_deps" {
-  layer_name  = "${var.project_name}-hamm-deps"
-  description = "Dependências do Hamm Lambda (linux/x86_64)"
-
-  # Upload via S3 — evita o limite de 70 MB do upload direto
-  s3_bucket         = aws_s3_bucket.artifacts.id
-  s3_key            = aws_s3_object.hamm_layer.key
-  source_code_hash  = filebase64sha256("${path.module}/dist/hamm_layer.zip")
-
-  compatible_runtimes      = ["python3.12"]
-  compatible_architectures = ["x86_64"]
 }
 
 # ─── Lambda Andy (producer) ───────────────────────────────────────────────────
@@ -107,36 +56,24 @@ resource "aws_cloudwatch_log_group" "andy" {
 
 resource "aws_lambda_function" "hamm" {
   function_name = "${var.project_name}-hamm"
-  description   = "Drains SQS queue on schedule and writes to Iceberg table (S3 Tables)"
+  description   = "Drains SQS queue on schedule and writes JSON Lines to S3 data lake"
 
   filename         = data.archive_file.hamm.output_path
   source_code_hash = data.archive_file.hamm.output_base64sha256
 
-  runtime       = "python3.12"
-  handler       = "handler.lambda_handler"
-  role          = var.hamm_role_arn
-  architectures = ["x86_64"]
-
-  # Layer com PyArrow + PyIceberg compilados para Linux x86_64
-  layers = [aws_lambda_layer_version.hamm_deps.arn]
-
-  # Timeout generoso — drena a fila inteira a cada execução
+  runtime = "python3.12"
+  handler = "handler.lambda_handler"
+  role    = var.hamm_role_arn
   timeout = 300
 
-  # Não reservar concorrência — usa o pool da conta
-  # Se precisar limitar a 1 execução simultânea, use -1 (unreserved) + SQS visibility timeout
-  reserved_concurrent_executions = -1
-
-  # Mais memória para PyArrow/PyIceberg
-  memory_size = 512
+  memory_size = 256
 
   environment {
     variables = {
-      S3_TABLES_ARN       = var.s3_tables_arn
-      S3_TABLES_NAMESPACE = var.s3_tables_namespace
-      S3_TABLES_TABLE     = var.s3_tables_table
-      SQS_QUEUE_URL       = var.sqs_queue_url
-      SQS_BATCH_SIZE      = "10"
+      DATA_LAKE_BUCKET = var.data_lake_bucket_name
+      RAW_PREFIX       = "raw"
+      SQS_QUEUE_URL    = var.sqs_queue_url
+      SQS_BATCH_SIZE   = "10"
     }
   }
 

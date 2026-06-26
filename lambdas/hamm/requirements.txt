@@ -1,5 +1,2 @@
-# boto3 já está incluído no runtime Python da AWS Lambda — não precisa no layer
-
-# PyIceberg para escrita em tabelas Iceberg via S3 Tables REST endpoint
-pyiceberg==0.9.1
-pyarrow==18.1.0
+# boto3 já está incluído no runtime Python da AWS Lambda — não precisa aqui
+# Hamm usa apenas boto3 (S3 + SQS) — sem dependências externas
